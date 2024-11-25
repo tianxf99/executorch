@@ -34,6 +34,7 @@ class QcomChipset(IntEnum):
     SM8475 = 42  # v69
     SM8550 = 43  # v73
     SM8650 = 57  # v75
+    SA8295 = 39  # V68
 
 
 @dataclass
@@ -47,6 +48,7 @@ _soc_info_table = {
     QcomChipset.SM8475: SocInfo(QcomChipset.SM8475, HtpInfo(HtpArch.V69, 8)),
     QcomChipset.SM8550: SocInfo(QcomChipset.SM8550, HtpInfo(HtpArch.V73, 8)),
     QcomChipset.SM8650: SocInfo(QcomChipset.SM8650, HtpInfo(HtpArch.V75, 8)),
+    QcomChipset.SA8295: SocInfo(QcomChipset.SA8295, HtpInfo(HtpArch.V68, 8)),
 }
 
 

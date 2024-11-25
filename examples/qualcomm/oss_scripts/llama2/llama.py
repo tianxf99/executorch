@@ -52,6 +52,7 @@ soc_to_chipset_map = {
     "SM8550": QcomChipset.SM8550,
     "SM8475": QcomChipset.SM8475,
     "SM8450": QcomChipset.SM8450,
+    "SA8295": QcomChipset.SA8295,
 }
 
 
@@ -420,6 +421,7 @@ def inference(args, pre_gen_pte=""):
             f"--temperature {args.temperature}",
         ]
     )
+    print("runner args: {}".format(runner_args))
     runner_cmd = " ".join(
         [
             f"cd {workspace} &&",
@@ -444,7 +446,7 @@ def inference(args, pre_gen_pte=""):
         runner="examples/qualcomm/oss_scripts/llama2/qnn_llama_runner",
     )
     # No pregen inputs, input_list is not required
-    adb.push(inputs=[], input_list="", files=[args.tokenizer_bin])
+    # adb.push(inputs=[], input_list="", files=[args.tokenizer_bin])
     adb.execute(custom_runner_cmd=runner_cmd)
 
     # collect output data
@@ -570,7 +572,7 @@ if __name__ == "__main__":
         inference(args, args.pre_gen_pte)
         exit(f"Finish the running pre_gen_pte from {args.pre_gen_pte}")
 
-    compile(args)
+    # compile(args)
     if args.compile_only:
         exit(f"Finish compile_only and save to {args.artifact}")
 
