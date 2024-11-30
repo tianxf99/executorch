@@ -46,6 +46,8 @@ from sentencepiece import SentencePieceProcessor
 from torch.ao.quantization.observer import MinMaxObserver
 from torch.ao.quantization.quantize_pt2e import convert_pt2e, prepare_pt2e
 
+import sys
+sys.setrecursionlimit(10000)
 
 soc_to_chipset_map = {
     "SM8650": QcomChipset.SM8650,
@@ -572,7 +574,7 @@ if __name__ == "__main__":
         inference(args, args.pre_gen_pte)
         exit(f"Finish the running pre_gen_pte from {args.pre_gen_pte}")
 
-    # compile(args)
+    compile(args)
     if args.compile_only:
         exit(f"Finish compile_only and save to {args.artifact}")
 

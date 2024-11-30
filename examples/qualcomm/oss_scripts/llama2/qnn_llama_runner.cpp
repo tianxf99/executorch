@@ -22,6 +22,7 @@
 
 #include <fstream>
 #include <vector>
+#include <iostream>
 
 DEFINE_string(
     model_path,
@@ -82,13 +83,15 @@ int main(int argc, char** argv) {
   runner.generate(prompt, seq_len, [&](const std::string& piece) {
     inference_output += piece;
   });
-
+  ET_LOG(Info, "prompt: %s", prompt);
+  
   size_t inference_index = 0;
   auto output_file_name = FLAGS_output_folder_path + "/output_" +
       std::to_string(inference_index++) + "_0.raw";
   std::ofstream fout(output_file_name.c_str());
   fout << inference_output;
   fout.close();
+  ET_LOG(Info, "inference: %s", inference_output.c_str());
 
   return 0;
 }

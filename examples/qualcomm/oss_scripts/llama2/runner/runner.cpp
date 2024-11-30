@@ -89,7 +89,7 @@ Error Runner::load() {
   max_seq_len_ = getMetadataHelper<int64_t>("get_max_seq_len", 128);
   head_dim_ = getMetadataHelper<int64_t>("get_head_dim", 32);
   dim_ = getMetadataHelper<int64_t>("get_dim", 4096);
-
+  
   // Load tokenizer
   tokenizer_ = std::make_unique<BPETokenizer>();
   tokenizer_->load(tokenizer_path_);
@@ -161,9 +161,12 @@ Result<Tensor> Runner::run_model_step(
   token->mutable_data_ptr<int32_t>()[0] = input_token;
 
   // inputs:[tokens, start_pos, atten_mask, k_cache, v_cache]
-  auto outputs_res = module_->forward({token, start_pos, atten_mask});
+  std::vector<executorch::runtime::EValue> inputs = {
+      token, start_pos, atten_mask};
+  inputs.insert(inputs.end(), kv_tensors.begin(), kv_tensors.end());
+  auto outputs_res = module_->forward(inputs);
   ET_CHECK_OK_OR_RETURN_ERROR(outputs_res.error());
-
+  
   // TODO: need to handle batch size != 1
   size_t v_offset = kv_outputs[0]->nbytes();
   size_t el_size = kv_outputs[0]->element_size();
@@ -362,7 +365,6 @@ Error Runner::generate(
     } else if (pos == num_prompt_tokens - 1) {
       stats_.prompt_eval_end_ms = time_in_ms();
     }
-
     ET_CHECK_OK_OR_RETURN_ERROR(logits_res.error());
     Tensor& logits_tensor = logits_res.get();
     prev_token = cur_token;
