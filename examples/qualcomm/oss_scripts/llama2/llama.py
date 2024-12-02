@@ -59,7 +59,7 @@ soc_to_chipset_map = {
 
 
 pte_filename = "llama2_qnn"
-
+qtz_filename = "llama2_quantized"
 
 def annotate_matmul_16a8w(gm: torch.fx.GraphModule) -> None:
     """
@@ -274,7 +274,9 @@ class SingleLlama:
                     ):
                         a.meta[QCOM_QUANTIZED_IO] = kv_type
 
-    def quantize(self, quant_dtype, custom_annotations=()):
+    def quantize(
+        self, pt2e_quantized_model_file_path, quant_dtype, custom_annotations=()
+    ):
         self.quant_dtype = quant_dtype
         quantizer = make_quantizer(
             quant_dtype=quant_dtype,
@@ -301,10 +303,14 @@ class SingleLlama:
         )
 
         self.llama_model = convert_pt2e(fx_graph_module)
+        print("storing quantized model")
+        quantized_ep = torch.export.export(self.llama_model, self.inputs)
+        torch.export.save(quantized_ep, pt2e_quantized_model_file_path)
 
     def lowering_modules(
         self, work_space, kv_type=torch.uint8, soc_model=QcomChipset.SM8650
     ):
+        print("prepare config")
         executorch_config = ExecutorchBackendConfig(
             passes=[
                 BuildQuantIo(),
@@ -319,6 +325,7 @@ class SingleLlama:
             ),
             extract_delegate_segments=True,
         )
+        print("prepare backend")
         with torch.no_grad():
             # backend option
             backend_options = generate_htp_compiler_spec(use_fp16=False)
@@ -328,6 +335,7 @@ class SingleLlama:
                 shared_buffer=True,
             )
             partitioner = QnnPartitioner(compiler_specs)
+            print("capture program")
             edge_prog = capture_program(self.llama_model, self.inputs)
             self._tag_kv_ios(edge_prog.exported_program.graph_module, kv_type=kv_type)
             edge_prog_mgr = EdgeProgramManager(
@@ -335,8 +343,11 @@ class SingleLlama:
                 constant_methods=self.llama_meta,
                 compile_config=EdgeCompileConfig(_check_ir_validity=False),
             )
+            print("to backend")
             edge_prog_mgr = edge_prog_mgr.to_backend(partitioner)
+            print("to executorch")
             exec_prog_mgr = edge_prog_mgr.to_executorch(config=executorch_config)
+            print("storing pte file")
             with open(f"{work_space}/{pte_filename}.pte", "wb") as file:
                 exec_prog_mgr.write_to_file(file)
 
@@ -347,7 +358,7 @@ class SingleLlama:
         return self.llama_model.get_export_inputs()
 
 
-def compile(args):
+def compile(args, pre_gen_qtz=""):
     os.makedirs(args.artifact, exist_ok=True)
     start_ts = time.time()
     with open(args.params) as f:
@@ -393,16 +404,25 @@ def compile(args):
     llama_instance = convert_linear_to_conv2d(llama_instance)
     single_llama = SingleLlama(llama_instance.eval())
 
-    start_quantize_ts = time.time()
-    single_llama.quantize(
-        quant_dtype,
-        custom_annotations=(
-            annotate_matmul_16a8w,
-            annotate_linear_16a8w_in_affine_layer,
-        ),
-    )
-    end_quantize_ts = time.time()
-    print("single_llama.quantize(quant_dtype)", end_quantize_ts - start_quantize_ts)
+    pt2e_quantized_model_file_path = f"{args.artifact}/{qtz_filename}.pth"
+    if not pre_gen_qtz:
+        print("start quantizing")
+        start_quantize_ts = time.time()
+        single_llama.quantize(
+            pt2e_quantized_model_file_path,
+            quant_dtype,
+            custom_annotations=(
+                annotate_matmul_16a8w,
+                annotate_linear_16a8w_in_affine_layer,
+            ),
+        )
+        end_quantize_ts = time.time()
+        print("single_llama.quantize(quant_dtype)", end_quantize_ts - start_quantize_ts)
+    else:
+        print("loading quantized model")
+        with torch.no_grad():
+            single_llama.llama_model = torch.export.load(pt2e_quantized_model_file_path).module()
+
     single_llama.lowering_modules(
         args.artifact, kv_type=kv_type, soc_model=soc_to_chipset_map[args.model]
     )
@@ -566,6 +586,13 @@ if __name__ == "__main__":
         type=str,
     )
 
+    parser.add_argument(
+        "--pre_gen_qtz",
+        help="compile the Pre-generated quantized llama2 in the given directory",
+        type=str,
+    )
+
+
     args = parser.parse_args()
     if args.compile_only and args.pre_gen_pte:
         exit("Cannot set both compile_only and pre_gen_pte as true")
@@ -574,7 +601,7 @@ if __name__ == "__main__":
         inference(args, args.pre_gen_pte)
         exit(f"Finish the running pre_gen_pte from {args.pre_gen_pte}")
 
-    compile(args)
+    compile(args, args.pre_gen_qtz)
     if args.compile_only:
         exit(f"Finish compile_only and save to {args.artifact}")
 
