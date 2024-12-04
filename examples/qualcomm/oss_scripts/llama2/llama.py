@@ -303,9 +303,9 @@ class SingleLlama:
         )
 
         self.llama_model = convert_pt2e(fx_graph_module)
-        print("storing quantized model")
-        quantized_ep = torch.export.export(self.llama_model, self.inputs)
-        torch.export.save(quantized_ep, pt2e_quantized_model_file_path)
+        #print("storing quantized model")
+        #quantized_ep = torch.export.export(self.llama_model, self.inputs)
+        #torch.export.save(quantized_ep, pt2e_quantized_model_file_path)
 
     def lowering_modules(
         self, work_space, kv_type=torch.uint8, soc_model=QcomChipset.SM8650
